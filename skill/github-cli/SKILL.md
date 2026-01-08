@@ -61,11 +61,37 @@ description: >
 | Rerun failed | `gh run rerun <run-id> --failed` |
 | List workflows | `gh workflow list` |
 
-### API Access
+### API & GraphQL
+
+**REST API:**
 ```bash
 gh api repos/<owner>/<repo>/pulls
-gh api graphql -f query='...'
+gh api repos/<owner>/<repo>/issues/<number>/comments
 ```
+
+**GraphQL** (for data not exposed by `gh pr view`):
+```bash
+# List PR review threads (gh pr view doesn't expose these)
+gh api graphql -F owner=<owner> -F name=<repo> -F number=<pr> -f query='
+query($owner:String!, $name:String!, $number:Int!){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$number){
+      reviewThreads(first:100){
+        nodes{id isResolved isOutdated comments(first:50){nodes{id author{login} body}}}
+        pageInfo{hasNextPage endCursor}
+      }
+    }
+  }
+}'
+
+# Resolve a review thread
+gh api graphql -F threadId=<threadId> -f query='
+mutation($threadId:ID!){
+  resolveReviewThread(input:{threadId:$threadId}){thread{isResolved}}
+}'
+```
+
+**Pagination:** If `pageInfo.hasNextPage` is true, repeat with `after: "<endCursor>"`.
 
 ## Procedure
 
@@ -79,3 +105,5 @@ gh api graphql -f query='...'
 - Use `--draft` for work-in-progress PRs
 - Prefer `gh pr merge --squash` for clean history
 - Check `gh run list` after pushing to verify CI
+- Use GraphQL for review threads (`gh pr view` doesn't expose them)
+- Handle pagination when results exceed 100 items
